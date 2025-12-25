@@ -1,39 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, Stethoscope, Scale, FlaskConical, BookOpen } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen } from 'lucide-react';
 
 const scenarios = [
   {
-    id: 'medical',
-    title: 'Medical Diagnosis',
-    description: 'Differential diagnosis with overlapping symptoms. QUBO finds diverse conditions while Top-K returns duplicates.',
-    icon: Stethoscope,
-    badge: 'Recommended',
-    stats: { docs: 210, clusters: 14 },
-  },
-  {
-    id: 'legal',
-    title: 'Legal Case Law',
-    description: 'Find relevant precedents across different case types. Shows enterprise search improvement.',
-    icon: Scale,
-    badge: null,
-    stats: { docs: 150, clusters: 5 },
-  },
-  {
-    id: 'greedy_trap',
-    title: 'Adversarial Test',
-    description: 'Dataset designed to exploit MMR weaknesses. Demonstrates QUBO global optimization.',
-    icon: FlaskConical,
-    badge: 'Technical',
-    stats: { docs: 35, clusters: 5 },
-  },
-  {
     id: 'wikipedia',
     title: 'Wikipedia Knowledge',
-    description: 'Large-scale knowledge retrieval across 171 diverse topics. Best demonstrates diversity improvements at scale.',
+    description: 'Large-scale knowledge retrieval across 171 diverse topics. Demonstrates diversity improvements at scale.',
     icon: BookOpen,
-    badge: 'Large Scale',
+    badge: 'Recommended',
     stats: { docs: 5600, clusters: 171 },
   },
 ];
@@ -98,13 +74,13 @@ export default function DemoPage() {
         {/* Quick start */}
         <div className="mt-10 p-6 rounded-xl bg-muted/50 text-center">
           <p className="text-sm text-muted-foreground mb-3">
-            Not sure which to pick? Start with Medical Diagnosis for the clearest demonstration.
+            Explore retrieval diversity with our Wikipedia knowledge base.
           </p>
           <Link
-            href="/demo/medical"
+            href="/demo/wikipedia"
             className="inline-flex items-center gap-2 px-4 py-2 bg-foreground text-white rounded-lg text-sm font-medium hover:bg-foreground/90 transition-colors"
           >
-            Start Medical Demo
+            Start Demo
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>

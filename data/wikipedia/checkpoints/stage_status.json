@@ -1,0 +1,7 @@
+{
+  "articles": true,
+  "chunks": true,
+  "embeddings": true,
+  "upload_complete": true,
+  "num_prompt_articles": 100
+}

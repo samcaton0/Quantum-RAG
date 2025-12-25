@@ -5,8 +5,7 @@ Compare API - Runs all three retrieval methods and returns comparison.
 from fastapi import APIRouter, HTTPException
 
 from ..models.schemas import CompareRequest, CompareResponse
-from ..services.retrieval_service import get_retrieval_service
-from ..services.visualization_service import get_visualization_service
+from ..services.simple_retrieval_service import get_simple_retrieval_service
 
 router = APIRouter(prefix="/api", tags=["compare"])
 
@@ -20,16 +19,7 @@ async def compare_methods(request: CompareRequest) -> CompareResponse:
     of industry standard vs Quantum-RAG.
     """
     try:
-        retrieval_service = get_retrieval_service()
-        viz_service = get_visualization_service()
-
-        # Check if dataset is available
-        available = retrieval_service.get_available_datasets()
-        if request.dataset not in available:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Dataset '{request.dataset}' not available. Available: {available}"
-            )
+        retrieval_service = get_simple_retrieval_service()
 
         # Run comparison with configurable parameters
         results = await retrieval_service.compare_methods(
@@ -44,28 +34,14 @@ async def compare_methods(request: CompareRequest) -> CompareResponse:
             solver_preset=request.solver_preset,
         )
 
-        # Get UMAP coordinates
-        umap_points = viz_service.get_embeddings_for_dataset(request.dataset)
-
-        # Mark selected points
-        selected_ids = {
-            "topk": [r.chunk_id for r in results["topk"].results],
-            "mmr": [r.chunk_id for r in results["mmr"].results],
-            "qubo": [r.chunk_id for r in results["qubo"].results],
-        }
-        umap_points = viz_service.mark_selected_points(umap_points, selected_ids)
-
-        # Get query point
-        query_point = viz_service.get_query_point(request.query, request.dataset)
-
         return CompareResponse(
-            query=request.query,
-            dataset=request.dataset,
+            query=results["query"],
+            dataset=results["dataset"],
             topk=results["topk"],
             mmr=results["mmr"],
             qubo=results["qubo"],
-            umap_points=umap_points,
-            query_point=query_point,
+            umap_points=results.get("umap_points", []),
+            query_point=results.get("query_point"),
         )
 
     except FileNotFoundError as e:

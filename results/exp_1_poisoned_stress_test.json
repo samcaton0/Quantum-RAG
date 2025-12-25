@@ -28,7 +28,7 @@
       "mean_aspect_recall": 62.6,
       "std_aspect_recall": 7.29657453878188,
       "mean_precision": 99.6,
-      "std_precision": 2.8000000000000003
+      "std_precision": 2.8
     },
     "mmr": {
       "mean_aspect_recall": 75.4,
@@ -76,9 +76,9 @@
     },
     "mmr": {
       "mean_aspect_recall": 65.2,
-      "std_aspect_recall": 17.803370467414307,
+      "std_aspect_recall": 17.80337046741431,
       "mean_precision": 99.2,
-      "std_precision": 3.9191835884530852
+      "std_precision": 3.919183588453086
     },
     "qubo": {
       "mean_aspect_recall": 74.6,
@@ -92,21 +92,21 @@
     "num_prompts": 100,
     "topk": {
       "mean_aspect_recall": 37.6,
-      "std_aspect_recall": 14.772948250095508,
+      "std_aspect_recall": 14.77294825009551,
       "mean_precision": 100.0,
       "std_precision": 0.0
     },
     "mmr": {
       "mean_aspect_recall": 64.6,
-      "std_aspect_recall": 18.0787167686205,
+      "std_aspect_recall": 18.078716768620495,
       "mean_precision": 99.4,
-      "std_precision": 3.411744421846396
+      "std_precision": 3.4117444218463957
     },
     "qubo": {
       "mean_aspect_recall": 73.8,
-      "std_aspect_recall": 13.474420210161178,
+      "std_aspect_recall": 13.474420210161174,
       "mean_precision": 99.4,
-      "std_precision": 3.4117444218463966
+      "std_precision": 3.411744421846396
     }
   },
   {

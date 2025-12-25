@@ -43,12 +43,8 @@ venv/
 .env/
 .venv/
 
-# Large data files
-data/
-*.zip
-demo_chroma_db/
-**/demo_chroma_db/
-umap_cache/
+# Large vector database files
+data/wikipedia/chroma_db/
 
 # Claude
 .claude/
