@@ -14,8 +14,7 @@ class RetrievalResult(BaseModel):
     source: str = Field(..., description="Source filename")
     chunk_id: str = Field(..., description="Unique chunk identifier")
     aspect_id: Optional[int] = Field(None, description="Aspect ID for Wikipedia dataset")
-    aspect_name: Optional[str] = Field(None, description="Aspect name (e.g., 'symptoms', 'treatment')")
-    prompt_id: Optional[str] = Field(None, description="Prompt ID for Wikipedia dataset")
+    aspect_name: Optional[str] = Field(None, description="Human-readable aspect name")
 
 
 class RetrievalMetrics(BaseModel):
@@ -25,9 +24,9 @@ class RetrievalMetrics(BaseModel):
     cluster_coverage: int = Field(..., description="Number of unique clusters covered")
     total_clusters: int = Field(..., description="Total clusters in dataset")
     avg_relevance: float = Field(..., description="Average relevance score")
-    aspect_recall: Optional[float] = Field(None, description="Aspect recall percentage (Wikipedia dataset)")
-    aspects_found: Optional[int] = Field(None, description="Number of unique aspects found")
-    total_aspects: Optional[int] = Field(5, description="Total aspects in article (Wikipedia dataset)")
+    aspect_recall: Optional[float] = Field(None, description="Percentage of gold aspects retrieved (Wikipedia dataset only)")
+    aspects_found: Optional[int] = Field(None, description="Number of gold aspects found (Wikipedia dataset only)")
+    total_aspects: Optional[int] = Field(5, description="Total gold aspects available (typically 5 for Wikipedia)")
 
 
 class MethodResult(BaseModel):
@@ -52,12 +51,12 @@ class UMAPPoint(BaseModel):
 class CompareRequest(BaseModel):
     """Request for /api/compare endpoint."""
     query: str = Field(..., description="User query", min_length=1)
-    dataset: str = Field("wikipedia", description="Dataset to search (only wikipedia supported)")
+    dataset: str = Field("medical", description="Dataset to search (medical, legal, greedy_trap)")
     k: int = Field(5, description="Number of results to retrieve", ge=1, le=20)
     include_llm: bool = Field(True, description="Whether to generate LLM responses")
 
-    # Configurable retrieval parameters (optimized from experiments)
-    alpha: float = Field(0.04, description="QUBO diversity weight (0=relevance only, 1=max diversity)", ge=0.0, le=1.0)
+    # Configurable retrieval parameters (production values from experiments)
+    alpha: float = Field(0.04, description="QUBO diversity weight (0=relevance only, 1=max diversity). Default 0.04 tuned via experiments.", ge=0.0, le=1.0)
     beta: float = Field(0.8, description="QUBO similarity threshold (0-1). Penalizes similarity only above this value.", ge=0.0, le=1.0)
     penalty: float = Field(10.0, description="QUBO cardinality penalty (enforces exactly k selections)", ge=0.0, le=10000.0)
     lambda_param: float = Field(0.85, description="MMR lambda parameter (0=diversity, 1=relevance)", ge=0.0, le=1.0)

@@ -2,13 +2,25 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Search, Loader2, RotateCcw, Check, X, Minus, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Search, Loader2, RotateCcw, Check, X, Minus } from 'lucide-react';
 import { compareMethodsAPI, type CompareResponse } from '@/lib/api';
 import { DEMO_QUERIES } from '@/lib/mockData';
 import ParameterControls from '@/components/demo/ParameterControls';
 
 // Scenario configurations
 const scenarios: Record<string, { title: string; description: string }> = {
+  medical: {
+    title: 'Medical Diagnosis',
+    description: 'Compare retrieval methods on differential diagnosis',
+  },
+  legal: {
+    title: 'Legal Case Law',
+    description: 'Compare retrieval methods on legal precedents',
+  },
+  greedy_trap: {
+    title: 'Adversarial Test',
+    description: 'Stress test designed to break greedy methods',
+  },
   wikipedia: {
     title: 'Wikipedia Knowledge',
     description: 'Large-scale retrieval across 171 diverse topics',
@@ -21,19 +33,17 @@ interface PageProps {
 
 export default function ScenarioDemoPage({ params }: PageProps) {
   const { scenario } = params;
-  const config = scenarios[scenario] || scenarios.wikipedia;
-  const suggestions = DEMO_QUERIES[scenario as keyof typeof DEMO_QUERIES] || DEMO_QUERIES.wikipedia;
+  const config = scenarios[scenario] || scenarios.medical;
+  const suggestions = DEMO_QUERIES[scenario as keyof typeof DEMO_QUERIES] || DEMO_QUERIES.medical;
 
   const [query, setQuery] = useState('');
-  const [selectedArticle, setSelectedArticle] = useState('');
-  const [prompts, setPrompts] = useState<Array<{prompt_id: string, text: string, article_title: string}>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<CompareResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string>('');
   const [startTime, setStartTime] = useState<number>(0);
 
-  // Parameter state matching experiments
+  // Parameter state - production values from experiments
   const [alpha, setAlpha] = useState(0.04);
   const [beta, setBeta] = useState(0.8);
   const [penalty, setPenalty] = useState(10.0);
@@ -77,30 +87,13 @@ export default function ScenarioDemoPage({ params }: PageProps) {
     }
   }, [query, scenario, isLoading, alpha, beta, penalty, lambdaParam, solverPreset]);
 
-  const handleArticleChange = useCallback((article: string) => {
-    setSelectedArticle(article);
-    const prompt = prompts.find(p => p.article_title === article);
-    if (prompt) {
-      setQuery(prompt.text);
-    }
-  }, [prompts]);
+  const handleSuggestion = useCallback((suggestion: string) => {
+    setQuery(suggestion);
+  }, []);
 
   const handleReset = useCallback(() => {
     setResults(null);
     setQuery('');
-    setSelectedArticle('');
-  }, []);
-
-  // Load prompts on mount for Wikipedia dataset
-  useEffect(() => {
-    fetch('http://localhost:8000/api/prompts')
-      .then(res => res.json())
-      .then(data => {
-        setPrompts(data.prompts);
-        // Sort alphabetically by article title
-        data.prompts.sort((a: any, b: any) => a.article_title.localeCompare(b.article_title));
-      })
-      .catch(err => console.error('Failed to load prompts:', err));
   }, []);
 
   // Update elapsed time display
@@ -173,53 +166,45 @@ export default function ScenarioDemoPage({ params }: PageProps) {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="mb-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-2">
-                  Select Wikipedia Article
-                </label>
-                <select
-                  value={selectedArticle}
-                  onChange={(e) => handleArticleChange(e.target.value)}
+            <form onSubmit={handleSubmit} className="mb-6">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Enter a query to compare methods..."
                   disabled={isLoading}
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 pr-12 rounded-xl border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all"
+                />
+                <button
+                  type="submit"
+                  disabled={isLoading || !query.trim()}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-foreground text-white flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:bg-foreground/90 transition-colors"
                 >
-                  <option value="">-- Choose an article --</option>
-                  {prompts.map((prompt) => (
-                    <option key={prompt.prompt_id} value={prompt.article_title}>
-                      {prompt.article_title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {selectedArticle && (
-                <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-2">
-                    Full Prompt
-                  </label>
-                  <div className="px-4 py-3 rounded-xl border border-border bg-muted/30 text-foreground text-sm">
-                    {query}
-                  </div>
-                </div>
-              )}
-              <button
-                type="submit"
-                disabled={isLoading || !query.trim()}
-                className="w-full px-6 py-3 rounded-xl bg-foreground text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-foreground/90 transition-colors flex items-center justify-center gap-2"
-              >
-                {isLoading ? (
-                  <>
+                  {isLoading ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Running Comparison...</span>
-                  </>
-                ) : (
-                  <>
+                  ) : (
                     <Search className="w-4 h-4" />
-                    <span>Compare Methods</span>
-                  </>
-                )}
-              </button>
+                  )}
+                </button>
+              </div>
             </form>
+
+            <div>
+              <p className="text-xs text-muted-foreground mb-2">Try an example:</p>
+              <div className="flex flex-wrap gap-2">
+                {suggestions.map((suggestion, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleSuggestion(suggestion)}
+                    disabled={isLoading}
+                    className="px-3 py-1.5 text-sm rounded-lg border border-border text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                  >
+                    {suggestion.slice(0, 50)}{suggestion.length > 50 ? '...' : ''}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -281,50 +266,20 @@ export default function ScenarioDemoPage({ params }: PageProps) {
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <div className="flex items-center gap-1 text-muted-foreground text-xs mb-1">
-                        <span>Diversity Score</span>
-                        <div className="group relative">
-                          <HelpCircle className="w-3 h-3 cursor-help" />
-                          <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg z-10">
-                            Measures how different the retrieved documents are from each other. Calculated as 1 - (average cosine similarity between all pairs). Higher values mean more diverse results.
-                          </div>
-                        </div>
-                      </div>
+                      <div className="text-muted-foreground text-xs">Diversity</div>
                       <div className={`font-semibold ${color === 'success' ? 'text-success' : color === 'warning' ? 'text-warning' : 'text-danger'}`}>
-                        {(1 - data.metrics.intra_list_similarity).toFixed(3)}
+                        {Math.round((1 - data.metrics.intra_list_similarity) * 100)}%
                       </div>
                     </div>
                     <div>
-                      <div className="flex items-center gap-1 text-muted-foreground text-xs mb-1">
-                        <span>Aspect Recall</span>
-                        <div className="group relative">
-                          <HelpCircle className="w-3 h-3 cursor-help" />
-                          <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg z-10">
-                            Number of distinct aspects (topics/perspectives) covered in the results. Each Wikipedia article has 5 gold aspects - higher coverage means more comprehensive answers.
-                          </div>
-                        </div>
-                      </div>
+                      <div className="text-muted-foreground text-xs">Coverage</div>
                       <div className={`font-semibold ${color === 'success' ? 'text-success' : color === 'warning' ? 'text-warning' : 'text-danger'}`}>
-                        {data.metrics.aspects_found !== undefined
-                          ? `${data.metrics.aspects_found}/${data.metrics.total_aspects || 5}`
-                          : `${data.metrics.cluster_coverage}/${data.metrics.total_clusters}`}
+                        {data.metrics.aspects_found !== undefined ? `${data.metrics.aspects_found}/${data.metrics.total_aspects || 5}` : `${data.metrics.cluster_coverage}/${data.metrics.total_clusters}`}
                       </div>
                     </div>
-                    <div>
-                      <div className="flex items-center gap-1 text-muted-foreground text-xs mb-1">
-                        <span>Relevance Score</span>
-                        <div className="group relative">
-                          <HelpCircle className="w-3 h-3 cursor-help" />
-                          <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg z-10">
-                            Average similarity between the query and each retrieved document. Calculated as the mean cosine similarity. Higher values mean results are more relevant to the query.
-                          </div>
-                        </div>
-                      </div>
-                      <div className="font-semibold text-foreground">{data.metrics.avg_relevance.toFixed(3)}</div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground text-xs mb-1">Latency</div>
-                      <div className="font-semibold text-foreground">{Math.round(data.metrics.latency_ms)}ms</div>
+                    <div className="col-span-2">
+                      <div className="text-muted-foreground text-xs">Relevance</div>
+                      <div className="font-semibold text-foreground">{(data.metrics.avg_relevance * 100).toFixed(0)}%</div>
                     </div>
                   </div>
                 </div>
@@ -343,8 +298,8 @@ export default function ScenarioDemoPage({ params }: PageProps) {
                   <div key={method} className="space-y-2">
                     <div className="text-sm font-medium text-muted-foreground">{method}</div>
                     {data.results.map((result, i) => {
-                      // Use aspect_name if available (Wikipedia dataset), otherwise parse from source
-                      const cluster = result.aspect_name || result.source.replace('.txt', '').split('_').slice(0, -2).join('_') || result.source.replace('.txt', '').split('_')[0];
+                      // Use aspect_name if available, otherwise fallback to parsing source
+                      const aspectLabel = result.aspect_name || result.source.replace('.txt', '').split('_').slice(0, -2).join('_') || result.source.replace('.txt', '').split('_')[0];
                       return (
                         <div
                           key={i}
@@ -352,10 +307,10 @@ export default function ScenarioDemoPage({ params }: PageProps) {
                         >
                           <div className="flex items-center justify-between mb-1.5">
                             <span className="text-xs font-mono text-muted-foreground">#{result.rank}</span>
-                            <span className="text-xs text-muted-foreground">{result.score.toFixed(3)}</span>
+                            <span className="text-xs text-muted-foreground">{(result.score * 100).toFixed(0)}%</span>
                           </div>
                           <p className="text-sm text-foreground line-clamp-3 mb-2">{result.text}</p>
-                          <span className="inline-block px-2 py-0.5 text-xs rounded bg-muted text-muted-foreground">{cluster}</span>
+                          <span className="inline-block px-2 py-0.5 text-xs rounded bg-muted text-muted-foreground">{aspectLabel}</span>
                         </div>
                       );
                     })}
@@ -384,6 +339,17 @@ export default function ScenarioDemoPage({ params }: PageProps) {
               </div>
             </div>
 
+            {/* Summary */}
+            <div className="p-6 rounded-xl bg-success-light/30 border border-success/30 text-center">
+              <h3 className="font-semibold text-success mb-2">QUBO Wins</h3>
+              <p className="text-sm text-foreground">
+                {results.qubo.metrics.aspects_found !== undefined
+                  ? `${results.qubo.metrics.aspects_found}/${results.qubo.metrics.total_aspects || 5} aspects vs ${results.topk.metrics.aspects_found}/${results.topk.metrics.total_aspects || 5} for Top-K`
+                  : `${results.qubo.metrics.cluster_coverage} clusters vs ${results.topk.metrics.cluster_coverage} for Top-K`
+                } •{' '}
+                {Math.round((1 - results.qubo.metrics.intra_list_similarity / results.topk.metrics.intra_list_similarity) * 100)}% more diverse
+              </p>
+            </div>
           </div>
         )}
       </div>

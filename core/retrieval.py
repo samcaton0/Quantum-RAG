@@ -9,6 +9,41 @@ from .embedding import EmbeddingGenerator
 from .storage import VectorStore
 from .utils import compute_cosine_similarities, compute_pairwise_similarities
 
+
+def qubo_to_ising(r: np.ndarray, Q: np.ndarray, alpha: float, P: float, k: int):
+    """
+    Vectorized implementation of qubo_to_ising.
+    """
+    n = len(r)
+    
+    # 1. J Calculation
+    # alpha * Q is (n, n)
+    # Adding P (scalar) adds P to every element in the matrix
+    J = (alpha * Q + P) / 4.0  # Result is matrix (n, n)
+    
+    # 2. h Calculation
+    # Q.sum(axis=1) creates a vector of shape (n,)
+    # r is a vector of shape (n,)
+    # n*P and 2*P*k are scalars
+    # The result of (Vector + Scalar - Vector - Scalar) is a Vector (n,)
+    h = 0.5 * (alpha * Q.sum(axis=1) + n * P - r - 2 * P * k)
+    
+    return J, h
+
+
+def ising_to_qubo_solution(s: np.ndarray) -> np.ndarray:
+    """
+    Convert Ising spin configuration to QUBO binary variables.
+
+    Args:
+        s: Ising spins (n,) with values in {-1, +1}
+
+    Returns:
+        x: Binary variables (n,) with values in {0, 1}
+    """
+    return ((s + 1) / 2).astype(int)
+
+
 class BaseRetrievalStrategy(ABC):
     """Abstract base class for retrieval strategies."""
     @abstractmethod
@@ -60,8 +95,8 @@ class MMRRetrieval(BaseRetrievalStrategy):
         return [RetrievalResult(Chunk(id=candidates[i]['id'], text=candidates[i]['text'], source=candidates[i]['metadata'].get('source', candidates[i]['metadata'].get('article_title', 'unknown')), metadata=candidates[i]['metadata']), candidates[i]['score'], rank+1) for rank, i in enumerate(selected_indices)]
 
 class QUBORetrieval(BaseRetrievalStrategy):
-    """QUBO-based retrieval using Gurobi or other solvers."""
-    def __init__(self, alpha: float = 0.04, penalty: float = 10.0, beta: float = 0.4, solver: str = 'gurobi'):
+    """QUBO-based retrieval using Gurobi or ORBIT solvers."""
+    def __init__(self, alpha: float = 0.04, penalty: float = 10.0, beta: float = 0.8, solver: str = 'gurobi'):
         self.alpha = alpha
         self.penalty = penalty
         self.beta = beta
@@ -70,40 +105,108 @@ class QUBORetrieval(BaseRetrievalStrategy):
     def retrieve(self, query_embedding: np.ndarray, candidates: List[Dict[str, Any]], k: int) -> List[RetrievalResult]:
         candidate_embeddings = np.array([c['embedding'] for c in candidates])
         query_sims = np.array([c['score'] for c in candidates])
-        
-        # This is where the QUBO formulation and solver call would go.
-        # For now, we'll mock the Gurobi solver logic.
+
+        n = len(candidates)
+        pairwise_sim = compute_pairwise_similarities(candidate_embeddings)
+
+        # Apply the beta threshold
+        thresholded_pairwise_sim = np.where(pairwise_sim >= self.beta, pairwise_sim, 0)
+
+        if self.solver == 'gurobi':
+            selected_indices = self._solve_gurobi(query_sims, thresholded_pairwise_sim, k, n)
+        elif self.solver == 'orbit':
+            selected_indices = self._solve_orbit(query_sims, thresholded_pairwise_sim, k, n)
+        else:
+            raise ValueError(f"Unknown solver: {self.solver}. Use 'gurobi' or 'orbit'.")
+
+        return [RetrievalResult(Chunk(id=candidates[i]['id'], text=candidates[i]['text'],
+                                      source=candidates[i]['metadata'].get('source', candidates[i]['metadata'].get('article_title', 'unknown')),
+                                      metadata=candidates[i]['metadata']),
+                                candidates[i]['score'], rank+1)
+                for rank, i in enumerate(selected_indices)]
+
+    def _solve_gurobi(self, query_sims: np.ndarray, pairwise_sim: np.ndarray, k: int, n: int) -> List[int]:
+        """Solve QUBO using Gurobi."""
         try:
             import gurobipy as gp
             from gurobipy import GRB
         except ImportError:
-            raise ImportError("Gurobi not found. Please install it to use the QUBO strategy.")
+            raise ImportError("Gurobi not found. Please install it to use solver='gurobi'.")
 
-        n = len(candidates)
-        pairwise_sim = compute_pairwise_similarities(candidate_embeddings)
-        
-        # Apply the beta threshold
-        thresholded_pairwise_sim = np.where(pairwise_sim >= self.beta, pairwise_sim, 0)
-        
         with gp.Env(empty=True) as env:
             env.setParam('OutputFlag', 0)
             env.start()
             with gp.Model("QUBO_Retrieval", env=env) as model:
                 x = model.addMVar(shape=n, vtype=GRB.BINARY, name="x")
-                
+
                 relevance_term = -query_sims @ x
-                diversity_term = self.alpha * (x @ (thresholded_pairwise_sim - np.identity(n)) @ x)
-                
+                diversity_term = self.alpha * (x @ (pairwise_sim - np.identity(n)) @ x)
+
                 model.setObjective(relevance_term + diversity_term, GRB.MINIMIZE)
                 model.addConstr(x.sum() == k, "cardinality")
                 model.optimize()
 
                 if model.Status == GRB.OPTIMAL:
-                    selected_indices = [i for i, v in enumerate(x.X) if v > 0.5]
-                else: # Fallback to naive if solver fails
-                    selected_indices = list(range(k))
+                    return [i for i, v in enumerate(x.X) if v > 0.5]
+                else:
+                    # Fallback to naive
+                    return list(range(k))
 
-        return [RetrievalResult(Chunk(id=candidates[i]['id'], text=candidates[i]['text'], source=candidates[i]['metadata'].get('source', candidates[i]['metadata'].get('article_title', 'unknown')), metadata=candidates[i]['metadata']), candidates[i]['score'], rank+1) for rank, i in enumerate(selected_indices)]
+    def _solve_orbit(self, query_sims: np.ndarray, pairwise_sim: np.ndarray, k: int, n: int) -> List[int]:
+        """Solve QUBO using ORBIT p-bit simulator."""
+        try:
+            import orbit
+        except ImportError:
+            raise ImportError("ORBIT not found. Please install it to use solver='orbit'.")
+
+        # Convert QUBO to Ising format
+        # Note: pairwise_sim already has diagonal zeroed via (pairwise_sim - I) in objective
+        # So we use pairwise_sim - I for the diversity matrix S
+        S = pairwise_sim - np.identity(n)
+        J, h = qubo_to_ising(query_sims, S, self.alpha, self.penalty, k)
+
+        # Scale coefficients to prevent overflow in ORBIT's sigmoid function
+        # ORBIT uses sigmoid(bias) which overflows if |bias| is too large
+        # Scale by max absolute value to keep coefficients reasonable
+        max_J = np.max(np.abs(J)) if J.size > 0 else 1.0
+        max_h = np.max(np.abs(h)) if h.size > 0 else 1.0
+        scale = max(max_J, max_h)
+
+        if scale > 100.0:  # Only scale if needed
+            J_scaled = J / scale
+            h_scaled = h / scale
+        else:
+            J_scaled = J
+            h_scaled = h
+
+        # Solve with ORBIT
+        # Beta range: start low for exploration, end high for exploitation
+        # Tuned parameters: more replicas for exploration, more sweeps for convergence
+        result = orbit.optimize_ising(
+            J_scaled, h_scaled,
+            n_replicas=8,
+            full_sweeps=300,
+            beta_initial=0.1,
+            beta_end=10.0,
+            beta_step_interval=1
+        )
+
+        # Convert Ising solution back to binary variables
+        x = ising_to_qubo_solution(result.min_state)
+
+        # Extract selected indices (where x_i = 1)
+        selected_indices = [i for i, val in enumerate(x) if val == 1]
+
+        # Debug: Print what ORBIT actually selected
+        if len(selected_indices) != k:
+            print(f"[DEBUG] ORBIT selected {len(selected_indices)} items (expected {k})")
+            print(f"[DEBUG] Penalty={self.penalty}, selected indices: {selected_indices}")
+
+            # If not exactly k selected (rare), fall back to top k by relevance
+            sorted_indices = np.argsort(-query_sims)
+            return sorted_indices[:k].tolist()
+
+        return selected_indices
 
 class Retriever:
     """Handles the retrieval process."""

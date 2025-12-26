@@ -12,7 +12,6 @@ export interface RetrievalResult {
   chunk_id: string;
   aspect_id?: number;
   aspect_name?: string;
-  prompt_id?: string;
 }
 
 export interface RetrievalMetrics {
@@ -53,6 +52,13 @@ export interface CompareResponse {
   query_point: { x: number; y: number } | null;
 }
 
+export interface DatasetInfo {
+  name: string;
+  total_chunks: number;
+  total_clusters: number;
+  description: string;
+}
+
 export interface HealthResponse {
   status: string;
   orbit_available: boolean;
@@ -79,13 +85,13 @@ export async function checkBackendHealth(): Promise<boolean> {
  */
 export async function compareMethodsAPI(
   query: string,
-  dataset: string = 'wikipedia',
+  dataset: string = 'medical',
   k: number = 5,
   includeLlm: boolean = true,
-  alpha: number = 0.04,
-  beta: number = 0.8,
-  penalty: number = 10.0,
-  lambdaParam: number = 0.85,
+  alpha: number = 0.15,
+  beta: float = 0.4,
+  penalty: number = 1000.0,
+  lambdaParam: number = 0.5,
   solverPreset: string = 'balanced'
 ): Promise<CompareResponse> {
   const response = await fetch(`${API_BASE}/api/compare`, {
@@ -109,6 +115,40 @@ export async function compareMethodsAPI(
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.detail || 'Comparison failed');
+  }
+
+  return response.json();
+}
+
+/**
+ * Get available datasets
+ */
+export async function getDatasetsAPI(): Promise<{ datasets: DatasetInfo[] }> {
+  const response = await fetch(`${API_BASE}/api/datasets`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch datasets');
+  }
+
+  return response.json();
+}
+
+/**
+ * Get UMAP embeddings for a dataset
+ */
+export async function getEmbeddingsAPI(
+  dataset: string,
+  forceRecompute: boolean = false
+): Promise<{ dataset: string; num_documents: number; umap_points: UMAPPoint[]; clusters: string[] }> {
+  const url = new URL(`${API_BASE}/api/embeddings/${dataset}`);
+  if (forceRecompute) {
+    url.searchParams.set('force_recompute', 'true');
+  }
+
+  const response = await fetch(url.toString());
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch embeddings');
   }
 
   return response.json();
